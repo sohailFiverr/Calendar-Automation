@@ -3,7 +3,9 @@ function onOpen() {
   var ui = SpreadsheetApp.getUi();
   var menu = ui.createMenu("Calendar");
   var item = menu.addItem("Authorize", "showSidebar");
+  var item2 = menu.addItem("Create Trigger", "main");
   item.addToUi();
+  item2.addToUi();
 }
 
 
@@ -13,6 +15,16 @@ function showSidebar() {
       .setWidth(300);
   SpreadsheetApp.getUi() 
       .showSidebar(html);
+}
+
+function main(){
+  var triggers = ScriptApp.getProjectTriggers();
+  for (var i = 0; i < triggers.length; i++) {
+    if (triggers[i].getHandlerFunction() === 'calendarAutomation') {
+      ScriptApp.deleteTrigger(triggers[i]);
+    }
+  }
+  ScriptApp.newTrigger('calendarAutomation').timeBased().everyMinutes(5).create();
 }
 
 function getAuthUrl() {
@@ -26,7 +38,7 @@ function getAuthUrl() {
       '">Link to Authorization Dialog</a>' +      
       '<br><br> This spreadsheet needs to either ' +
       'be authorized or re-authorized.';
-
+ 
   //ScriptApp.AuthMode.FULL is the auth mode to check for since no other authorization mode requires
   //that users grant authorization
   if (authInfo.getAuthorizationStatus() === ScriptApp.AuthorizationStatus.REQUIRED) {
@@ -47,12 +59,13 @@ function calendarAutomation() {
     var id = allCals[i].getId();
     if(id.indexOf('@import.calendar.google.com')+1>0){
       var cal = CalendarApp.getCalendarById(id);
-      var calname = getCalendarName(data, allCals[i].getName());
-      var evs = cal.getEventsForDay(new Date());
-      for(var j=0; j<evs.length; j++){
-        var endD = evs[j].getEndTime();
-        var endDt = Utilities.formatDate(subDaysFromDate(endD), "GMT", "MM/dd/yyyy");
-        if(today == endDt){
+      var tempEvents = cal.getEventsForDay(new Date());
+      if(tempEvents.length > 0){
+        var calname = getCalendarName(data, allCals[i].getName());
+        var result = ifEventExistsInCleaningCal(tempEvents[0], targetCal, calname);
+        if(result){
+          var endD = tempEvents[0].getEndTime();
+          var endDt = Utilities.formatDate(subDaysFromDate(endD), "GMT", "MM/dd/yyyy");
           var startTime = setTimeToDate(endD, "start");
           var endTime = setTimeToDate(endD, "end");
           targetCal.createEvent(calname, startTime, endTime);
@@ -62,6 +75,20 @@ function calendarAutomation() {
   }
 }
 
+
+function ifEventExistsInCleaningCal(tempEvent, targetCal, title){
+  var endD = tempEvent.getEndTime();
+  var endTime = subDaysFromDate(endD);
+  var events = targetCal.getEventsForDay(new Date(endTime));
+  var flag = true;
+  for(var j=0; j<events.length; j++){
+    if(events[j].getTitle() == title){
+      flag = false;
+      break;
+    }
+  }
+  return flag;
+}
 
 function subDaysFromDate(date){
    var result = new Date(date.getTime()-(24*3600*1000));
